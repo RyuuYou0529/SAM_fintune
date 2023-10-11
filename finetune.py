@@ -11,7 +11,7 @@ from tqdm import tqdm
 from segment_anything import sam_model_registry
 from segment_anything.utils.transforms import ResizeLongestSide
 
-def sample_points(img, front_num=100, back_num=100):
+def sample_points(img, low_num=100, high_num=200):
     img = np.asarray(img)
 
     front_point = []
@@ -20,6 +20,7 @@ def sample_points(img, front_num=100, back_num=100):
     back_label = []
 
     h, w = img.shape
+    front_num = np.random.randint(low_num,high_num+1)
     while front_num!=0:
         h_index = np.random.randint(0, h)
         w_index = np.random.randint(0, w)
@@ -27,6 +28,8 @@ def sample_points(img, front_num=100, back_num=100):
             front_point.append([w_index, h_index])
             front_label.append(1)
             front_num-=1
+
+    back_num = np.random.randint(low_num,high_num+1)
     while back_num!=0:
         h_index = np.random.randint(0, h)
         w_index = np.random.randint(0, w)
@@ -34,8 +37,18 @@ def sample_points(img, front_num=100, back_num=100):
             back_point.append([w_index, h_index])
             back_label.append(0)
             back_num-=1
-    point_list = torch.from_numpy(np.asarray(front_point+back_point)).to(torch.float)
-    label_list = torch.from_numpy(np.asarray(front_label+back_label)).to(torch.float)
+
+    point_list = np.asarray(front_point+back_point)
+    label_list = np.asarray(front_label+back_label)
+
+    state = np.random.get_state()
+    np.random.shuffle(point_list)
+    np.random.set_state(state)
+    np.random.shuffle(label_list)
+
+    point_list = torch.from_numpy(point_list).to(torch.float)
+    label_list = torch.from_numpy(label_list).to(torch.float)
+
     return point_list, label_list
 
 class DRIVE_Dataset(Dataset):
