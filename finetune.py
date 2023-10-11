@@ -35,7 +35,7 @@ def sample_points(img, front_num=100, back_num=100):
             back_label.append(0)
             back_num-=1
     point_list = torch.from_numpy(np.asarray(front_point+back_point)).to(torch.float)
-    label_list = torch.from_numpy(np.asarray(front_label+back_label)).to(torch.int)
+    label_list = torch.from_numpy(np.asarray(front_label+back_label)).to(torch.float)
     return point_list, label_list
 
 class DRIVE_Dataset(Dataset):
@@ -75,17 +75,17 @@ if __name__ == '__main__':
     # config
     # ==========
     num_epoch = 100
-    batch_size=8
+    batch_size=4
     lr = 1e-4
     device = torch.device('cuda:0')
-    checkpoint_path = '/home/ryuuyou/Project/segment-anything/checkpoints/finetune'
+    checkpoint_path = '/share/home/liuy/project/SAM_finetune/checkpoints/finetune'
     model_save_path = os.path.join(checkpoint_path, 'best.pth')
 
     # ==========
     # data
     # ==========
-    input_folder='/home/ryuuyou/Project/segment-anything/data/DRIVE/training/images'
-    label_folder='/home/ryuuyou/Project/segment-anything/data/DRIVE/training/1st_manual'
+    input_folder='/share/home/liuy/project/SAM_finetune/data/DRIVE/training/images'
+    label_folder='/share/home/liuy/project/SAM_finetune/data/DRIVE/training/1st_manual'
 
     ds = DRIVE_Dataset(input_folder=input_folder, label_folder=label_folder)
     dl = DataLoader(dataset=ds, batch_size=batch_size, shuffle=True)
@@ -93,7 +93,7 @@ if __name__ == '__main__':
     # ==========
     # prepare model
     # ==========
-    pretrained_path = '/home/ryuuyou/Project/segment-anything/checkpoints/sam_vit_b_01ec64.pth'
+    pretrained_path = '/share/home/liuy/project/SAM_finetune/checkpoints/sam_vit_b_01ec64.pth'
     model_type = "vit_b"
 
     sam_model = sam_model_registry[model_type]()
@@ -159,7 +159,7 @@ if __name__ == '__main__':
                 multimask_output=False,
             )
 
-
+            labels = labels.unsqueeze(1)
             loss = loss_fn(point_predictions, labels)
             optimizer.zero_grad()
             loss.backward()

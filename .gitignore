@@ -44,3 +44,4 @@ package-lock.json
 # fintune
 data/
 checkpoints/
+logs/
