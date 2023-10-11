@@ -136,8 +136,9 @@ if __name__ == '__main__':
             points = points.to(device)
             labels = labels.to(device)
 
+            original_size = inputs.shape[-2:]
             inputs = resize_transform.apply_image_torch(inputs)
-            points = resize_transform.apply_coords_torch(points)
+            points = resize_transform.apply_coords_torch(points, original_size)
 
             inputs = torch.stack([sam_model.preprocess(x) for x in inputs], dim=0)
 
