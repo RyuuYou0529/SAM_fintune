@@ -11,7 +11,7 @@ from tqdm import tqdm
 from segment_anything import sam_model_registry
 from segment_anything.utils.transforms import ResizeLongestSide
 
-def sample_points(img, low_num=100, high_num=200):
+def sample_points(img, sample_num=100):
     img = np.asarray(img)
 
     front_point = []
@@ -20,7 +20,7 @@ def sample_points(img, low_num=100, high_num=200):
     back_label = []
 
     h, w = img.shape
-    front_num = np.random.randint(low_num,high_num+1)
+    front_num = sample_num
     while front_num!=0:
         h_index = np.random.randint(0, h)
         w_index = np.random.randint(0, w)
@@ -29,7 +29,7 @@ def sample_points(img, low_num=100, high_num=200):
             front_label.append(1)
             front_num-=1
 
-    back_num = np.random.randint(low_num,high_num+1)
+    back_num = sample_num
     while back_num!=0:
         h_index = np.random.randint(0, h)
         w_index = np.random.randint(0, w)
@@ -87,7 +87,7 @@ if __name__ == '__main__':
     # ==========
     # config
     # ==========
-    num_epoch = 100
+    num_epoch = 200
     batch_size=4
     lr = 1e-4
     device = torch.device('cuda:0')
@@ -122,7 +122,8 @@ if __name__ == '__main__':
     # optimizer & loss
     # ==========
     optimizer = torch.optim.Adam(sam_model.mask_decoder.parameters(), lr=lr)
-    loss_fn = torch.nn.BCELoss()
+    bce_loss_fn = torch.nn.BCELoss()
+    dice_loss_fn = dice_loss
 
     # ==========
     # loss
@@ -138,19 +139,20 @@ if __name__ == '__main__':
     train_total_iters = 0
     for i in range(num_epoch):
 
-        loop = tqdm(enumerate(dl), ncols=100, total=len(dl))
+        loop = tqdm(enumerate(dl), ncols=150, total=len(dl))
         loop.set_description(f'Epoch [{i+1}/{num_epoch}]')
 
-        for index, (inputs, _, (points, labels)) in loop:
+        for index, (inputs, masks_gt, (points, labels)) in loop:
             train_total_iters += batch_size
 
             inputs = inputs.to(device)
-            # masks = masks.to(device)
+            masks_gt = masks_gt.to(device)
             points = points.to(device)
             labels = labels.to(device)
 
             original_size = inputs.shape[-2:]
             inputs = resize_transform.apply_image_torch(inputs)
+            input_size = inputs.shape[-2:]
             points = resize_transform.apply_coords_torch(points, original_size)
 
             inputs = torch.stack([sam_model.preprocess(x) for x in inputs], dim=0)
@@ -171,15 +173,24 @@ if __name__ == '__main__':
                 dense_prompt_embeddings=dense_embeddings,
                 multimask_output=False,
             )
-
+            
+            upscaled_masks = sam_model.postprocess_masks(low_res_masks, input_size, original_size).to(device)
             labels = labels.unsqueeze(1)
-            loss = loss_fn(point_predictions, labels)
+
+            # bce_loss_value = bce_loss_fn(point_predictions, labels)
+            dice_loss_value = dice_loss_fn(upscaled_masks, masks_gt)
+            # loss = bce_loss_value + dice_loss_value
+            loss = dice_loss_value
+
+            # writer.add_scalar('loss/BCE', bce_loss_value, global_step=train_total_iters)
+            writer.add_scalar('loss/dice', dice_loss_value, global_step=train_total_iters)
+            writer.add_scalar('loss/Loss', loss, global_step=train_total_iters)
+
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-
-            writer.add_scalar('loss/BCE', loss, global_step=train_total_iters)
-
+            
+            # loop.set_postfix_str(f'total_loss={loss.item():.6f} bce_loss={bce_loss_value.item():.6f}, dice_loss={dice_loss_value.item():.6f}')
             loop.set_postfix_str(f'loss={loss.item():.6f}')
             
             if loss.item() < best_loss:
